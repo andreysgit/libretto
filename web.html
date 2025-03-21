@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Libretto - Online EPUB Library</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #4a6da7;
+        }
+        .book-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .book-card {
+            background: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+            cursor: pointer;
+        }
+        .book-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .book-cover {
+            height: 250px;
+            background-color: #4a6da7;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+        .book-info {
+            padding: 15px;
+        }
+        .book-title {
+            font-weight: bold;
+            margin: 0 0 5px 0;
+            font-size: 16px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .book-author {
+            color: #666;
+            margin: 0;
+            font-size: 14px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            width: 80%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .modal-header h2 {
+            margin: 0;
+        }
+        .close-modal {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            margin: 0;
+        }
+        .book-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 8px;
+        }
+        .tag {
+            background: #e9f0f8;
+            color: #4a6da7;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+        .download-btn {
+            display: inline-block;
+            background-color: #4a6da7;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 4px;
+            text-decoration: none;
+            margin-top: 15px;
+        }
+        .download-btn:hover {
+            background-color: #3a5a8f;
+        }
+    </style>
+</head>
+<body>
+    <h1>Libretto - Online EPUB Library</h1>
+    
+    <div class="book-grid" id="bookGrid">
+        <!-- Books will be loaded here -->
+        <div class="loading">Loading library...</div>
+    </div>
+    
+    <!-- Book Details Modal -->
+    <div class="modal" id="bookModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalBookTitle">Book Title</h2>
+                <button class="close-modal" id="closeModal">&times;</button>
+            </div>
+            
+            <div style="display: flex; gap: 20px;">
+                <div style="flex: 0 0 150px;">
+                    <div id="modalBookCover" style="width: 150px; height: 200px; background-color: #4a6da7; background-size: cover; background-position: center;"></div>
+                </div>
+                <div style="flex: 1;">
+                    <p><strong>Author:</strong> <span id="modalBookAuthor"></span></p>
+                    <p><strong>Description:</strong></p>
+                    <p id="modalBookDescription"></p>
+                    <div class="book-tags" id="modalBookTags"></div>
+                    <a href="#" id="downloadLink" class="download-btn">Download EPUB</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const bookGrid = document.getElementById('bookGrid');
+        const bookModal = document.getElementById('bookModal');
+        const closeModal = document.getElementById('closeModal');
+        const modalBookTitle = document.getElementById('modalBookTitle');
+        const modalBookAuthor = document.getElementById('modalBookAuthor');
+        const modalBookDescription = document.getElementById('modalBookDescription');
+        const modalBookCover = document.getElementById('modalBookCover');
+        const modalBookTags = document.getElementById('modalBookTags');
+        const downloadLink = document.getElementById('downloadLink');
+        
+        // Load books from the API
+        async function loadBooks() {
+            try {
+                const response = await fetch('/api/books');
+                if (!response.ok) {
+                    throw new Error('Failed to fetch books');
+                }
+                
+                const books = await response.json();
+                renderBooks(books);
+            } catch (err) {
+                console.error('Error loading books:', err);
+                bookGrid.innerHTML = '<p>Error loading library. Please try again later.</p>';
+            }
+        }
+        
+        // Render books in the grid
+        function renderBooks(books) {
+            bookGrid.innerHTML = '';
+            
+            if (books.length === 0) {
+                bookGrid.innerHTML = '<p>No books in the library yet.</p>';
+                return;
+            }
+            
+            books.forEach(book => {
+                const bookCard = document.createElement('div');
+                bookCard.className = 'book-card';
+                bookCard.dataset.id = book.id;
+                
+                const coverStyle = book.cover_url 
+                    ? `background-image: url("${book.cover_url}")` 
+                    : 'background-color: #4a6da7';
+                
+                bookCard.innerHTML = `
+                    <div class="book-cover" style="${coverStyle}"></div>
+                    <div class="book-info">
+                        <h3 class="book-title">${book.title}</h3>
+                        <p class="book-author">${book.author}</p>
+                    </div>
+                `;
+                
+                bookCard.addEventListener('click', () => openBookDetails(book.id));
+                bookGrid.appendChild(bookCard);
+            });
+        }
+        
+        // Open book details modal
+        async function openBookDetails(bookId) {
+            try {
+                const response = await fetch(`/api/books/${bookId}`);
+                if (!response.ok) {
+                    throw new Error('Failed to fetch book details');
+                }
+                
+                const book = await response.json();
+                
+                modalBookTitle.textContent = book.title;
+                modalBookAuthor.textContent = book.author;
+                modalBookDescription.textContent = book.description || 'No description available.';
+                
+                if (book.cover_url) {
+                    modalBookCover.style.backgroundImage = `url("${book.cover_url}")`;
+                } else {
+                    modalBookCover.style.backgroundImage = '';
+                    modalBookCover.style.backgroundColor = '#4a6da7';
+                }
+                
+                // Set download link
+                downloadLink.href = book.file_url;
+                
+                // Render tags
+                modalBookTags.innerHTML = '';
+                if (book.tags && book.tags.length > 0) {
+                    book.tags.forEach(tag => {
+                        const tagElement = document.createElement('span');
+                        tagElement.className = 'tag';
+                        tagElement.textContent = tag.name;
+                        modalBookTags.appendChild(tagElement);
+                    });
+                }
+                
+                // Show the modal
+                bookModal.style.display = 'flex';
+            } catch (err) {
+                console.error('Error loading book details:', err);
+                alert('Failed to load book details. Please try again.');
+            }
+        }
+        
+        // Set up event listeners
+        closeModal.addEventListener('click', () => {
+            bookModal.style.display = 'none';
+        });
+        
+        // Close modal when clicking outside
+        window.addEventListener('click', (event) => {
+            if (event.target === bookModal) {
+                bookModal.style.display = 'none';
+            }
+        });
+        
+        // Load books when page loads
+        document.addEventListener('DOMContentLoaded', loadBooks);
+    </script>
+</body>
+</html>

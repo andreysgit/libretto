@@ -1,0 +1,36 @@
+{
+  "name": "libretto",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "electron .",
+    "server": "node server.js",
+    "postinstall": "electron-builder install-app-deps",
+    "rebuild": "electron-rebuild -f -w better-sqlite3"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.6.3",
+  "dependencies": {
+    "@electron/rebuild": "^3.7.1",
+    "better-sqlite3": "^11.9.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "electron": "^35.0.3",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "electron-builder": "^24.13.3",
+    "electron-reload": "2.0.0-alpha.1",
+    "epub2": "^3.0.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "electron"
+    ]
+  }
+}
