@@ -25,12 +25,16 @@ contextBridge.exposeInMainWorld('databaseAPI', {
   selectEpubFile: () => ipcRenderer.invoke('select-epub-file'),
   selectCoverImage: () => ipcRenderer.invoke('select-cover-image'),
 
-  // Web server operations
-  startWebServer: () => ipcRenderer.invoke('start-web-server'),
-  stopWebServer: () => ipcRenderer.invoke('stop-web-server'),
+  // // Web server operations
+  // startWebServer: () => ipcRenderer.invoke('start-web-server'),
+  // stopWebServer: () => ipcRenderer.invoke('stop-web-server'),
 
   // Epub metadata extraction
-  extractMetaData: (filePath) => ipcRenderer.invoke('extract-metadata', filePath)
+  extractMetaData: (filePath) => ipcRenderer.invoke('extract-metadata', filePath),
+
+  // Get book cover image object
+  getBookCover: (id) => ipcRenderer.invoke('get-book-cover', id)
+  
   
 });
 

@@ -3,6 +3,7 @@ let selectedEpubPath = null;
 let selectedCoverPath = null;
 let currentBookId = null;
 let books = [];
+let metaData = null;
 
 // DOM Elements
 const bookDateInput = document.getElementById('bookDate');
@@ -26,10 +27,11 @@ const modalBookCover = document.getElementById('modalBookCover');
 const modalBookTags = document.getElementById('modalBookTags');
 const deleteBookBtn = document.getElementById('deleteBookBtn');
 const openExternalBtn = document.getElementById('openExternalBtn');
-const startServerBtn = document.getElementById('startServerBtn');
-const stopServerBtn = document.getElementById('stopServerBtn');
-const serverStatus = document.getElementById('serverStatus');
 const coverImage = document.getElementById('selectedCoverImage')
+const addBookBtnLabel = document.getElementById('addBookBtnLabel')
+const resetBtn = document.getElementById('resetBtn');
+
+
 
 // Initialize the application
 async function init() {
@@ -53,45 +55,61 @@ async function loadBooks() {
     }
 }
 
-// Render books in the grid
-function renderBooks() {
+async function renderBooks() {
     bookGrid.innerHTML = '';
     
     if (books.length === 0) {
-        bookGrid.innerHTML = '<p>No books in your library yet. Add your first book using the form on the left.</p>';
-        return;
+      bookGrid.innerHTML = '<p>No books in your library yet. Add your first book using the form on the left.</p>';
+      return;
     }
     
-    books.forEach(book => {
-        const bookCard = document.createElement('div');
-        bookCard.className = 'book-card';
-        bookCard.dataset.id = book.id;
-        
-        const coverStyle = book.cover_path 
-            ? `background-image: url("file://${book.cover_path}")` 
-            : 'background-color: #4a6da7';
-        
-        bookCard.innerHTML = `
-            <div class="book-cover" style="${coverStyle}"></div>
-            <div class="book-info">
-                <h3 class="book-title">${book.title}</h3>
-                <p class="book-author">${book.author}</p>
-            </div>
-        `;
-        
-        bookCard.addEventListener('click', () => openBookDetails(book.id));
-        bookGrid.appendChild(bookCard);
-    });
-}
+    // Use a for...of loop so we can use await for each cover fetch.
+    for (const book of books) {
+      const bookCard = document.createElement('div');
+      bookCard.className = 'book-card';
+      bookCard.dataset.id = book.id;
+      
+      let coverStyle = 'background-color: #4a6da7'; // fallback style
+      
+      if (book.cover_path) {
+        try {
+          // Get the cover image as a data URL via IPC
+          const coverDataUrl = await window.databaseAPI.getBookCover(book.id);
+          if (coverDataUrl) {
+            coverStyle = `background-image: url('${coverDataUrl}')`;
+            console.log("Got a book cover");
+          }
+          else{
+            console.log("No book cover");
+          }
+        } catch (error) {
+          console.error('Error fetching cover for book', book.id, error);
+        }
+      }
+      
+      bookCard.innerHTML = `
+        <div class="book-cover" style="${coverStyle}"></div>
+        <div class="book-info">
+          <h3 class="book-title">${book.title}</h3>
+          <p class="book-author">${book.author}</p>
+        </div>
+      `;
+      
+      bookCard.addEventListener('click', () => openBookDetails(book.id));
+      bookGrid.appendChild(bookCard);
+    }
+  }
 
+// Helper function
 async function extractMetaData(epubPath) {
+
     console.log("Calling extractMetaData with path:", epubPath);
     if (!epubPath) {
         console.error("ExtractMetaData received undefined path!");
         return;
     }
 
-    const metaData = await window.databaseAPI.extractMetaData(epubPath);
+    metaData = await window.databaseAPI.extractMetaData(epubPath);
     console.log("Metadata received:", metaData);
     return metaData; // metaData is a plain JS object
 }
@@ -114,7 +132,16 @@ function setupEventListeners() {
                 bookAuthorInput.value = metaData['author'];
                 bookDateInput.value = metaData['date'];
                 coverImage.src = `data:${metaData.cover.mimeType};base64,${metaData.cover.data}`;
+                selectedCoverFile.textContent = "Extracted from EPUB file";
                 selectedEpubPath = sourcePath;
+                addBookBtnLabel.innerText = `Destination Path 
+                ${metaData.title} - ${metaData.author}.epub`;
+
+                // selectedCoverPath = await window.databaseAPI.selectCoverImage();
+
+                // if (selectedCoverPath) {
+                //     selectedCoverFile.textContent = selectedCoverPath.split('/').pop();
+                // }
 
             } catch (err) {
                 console.error('Failed to extract metadata:', err);
@@ -130,7 +157,12 @@ function setupEventListeners() {
         selectedCoverPath = await window.databaseAPI.selectCoverImage();
         if (selectedCoverPath) {
             selectedCoverFile.textContent = selectedCoverPath.split('/').pop();
+            coverImage.src = `${selectedCoverPath}`;
         }
+    });
+
+    resetBtn.addEventListener('click', async () => {
+        resetForm();
     });
     
     // Add book
@@ -153,7 +185,8 @@ function setupEventListeners() {
                 author,
                 description,
                 filePath: selectedEpubPath,
-                coverPath: selectedCoverPath
+                coverPath: selectedCoverPath,
+                coverImage: `data:${metaData.cover.mimeType};base64,${metaData.cover.data}`
             });
             
             // Add tags if provided
@@ -207,17 +240,6 @@ function setupEventListeners() {
         }
     });
     
-    // Start server
-    startServerBtn.addEventListener('click', async () => {
-        const result = await window.databaseAPI.startWebServer();
-        serverStatus.textContent = result.message;
-    });
-    
-    // Stop server
-    stopServerBtn.addEventListener('click', async () => {
-        const result = await window.databaseAPI.stopWebServer();
-        serverStatus.textContent = result.message;
-    });
 }
 
 // Set up tabs in the modal
@@ -284,8 +306,10 @@ function resetForm() {
     selectedCoverPath = null;
     selectedEpubFile.textContent = '';
     selectedCoverFile.textContent = '';
-    updateAddButtonState();
     coverImage.innerHTML = window.databaseAPI.getCoverPlaceholder();
+    updateAddButtonState();
+    addBookBtnLabel.value = "Destination Path"
+
 
 }
 
@@ -295,6 +319,9 @@ function updateAddButtonState() {
     const title = bookTitleInput.value.trim();
     const author = bookAuthorInput.value.trim();
     addBookBtn.disabled = !title || !author || !selectedEpubPath;
+    addBookBtnLabel.innerText = `Destination Path 
+    ${title} - ${author}.epub`;
+
 }
 
 // Add input event listeners to update button state

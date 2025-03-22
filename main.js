@@ -67,16 +67,10 @@ ipcMain.handle('get-users', () => {
 // Book-related operations
 ipcMain.handle('add-book', (event, bookData) => {
   try {
+    // bookData should include:
+    // title, author, description, filePath, coverPath, coverImage
 
-    //book data
-    /*title,
-    author,
-    description,
-    filePath
-    coverPath
-    */
-
-    console.log(bookData.filePath)
+    console.log(bookData.filePath);
     const libraryBase = path.join(__dirname, 'library');
 
     // Construct the directory path: library/author/title
@@ -88,13 +82,55 @@ ipcMain.handle('add-book', (event, bookData) => {
     // Create the file name: title - author.epub
     const fileName = `${bookData.title} - ${bookData.author}.epub`;
     const destPath = path.join(targetDir, fileName);
-    console.log(`Dest path: ${destPath}`)
+    console.log(`Dest path: ${destPath}`);
 
     // Copy the file if it doesn't already exist in the library
     if (!fs.existsSync(destPath)) {
       fs.copyFileSync(bookData.filePath, destPath);
     }
 
+    // Process cover file if provided; otherwise, use a default cover image from assets
+    let finalCoverPath = null;
+
+    if (bookData.coverImage) {
+      // Manual cover was provided, copy it to the same folder
+      // Expecting coverImage to be a data URL like "data:image/png;base64,..."
+      const dataUrl = bookData.coverImage;
+      // Use a regex to extract mime type and base64 data
+      const matches = dataUrl.match(/^data:(.+);base64,(.+)$/);
+
+      if (matches) {
+        const mimeType = matches[1]; // e.g., image/png
+        const base64Data = matches[2];
+        const coverBuffer = Buffer.from(base64Data, 'base64');
+        // Determine file extension from mime type
+        const extension = mimeType.split('/')[1] || 'png';
+        const coverFileName = `${bookData.title} - ${bookData.author}.${extension}`;
+        finalCoverPath = path.join(targetDir, coverFileName);
+        // Write the cover image file
+        fs.writeFileSync(finalCoverPath, coverBuffer);
+      } else {
+        console.error('Invalid cover image data URL');
+      }
+    } else if (bookData.coverPath) {
+      // Fallback to a manual cover file if available
+      const coverFileExt = path.extname(bookData.coverPath);
+      const coverFileName = `${bookData.title} - ${bookData.author}${coverFileExt}`;
+      finalCoverPath = path.join(targetDir, coverFileName);
+      if (!fs.existsSync(finalCoverPath)) {
+        fs.copyFileSync(bookData.coverPath, finalCoverPath);
+      }
+    } else {
+      // Use a default cover if no cover provided (optional)
+      const defaultCoverSource = path.join(__dirname, 'assets', 'default_cover.png');
+      const coverFileName = `${bookData.title} - ${bookData.author}.png`;
+      finalCoverPath = path.join(targetDir, coverFileName);
+      if (fs.existsSync(defaultCoverSource) && !fs.existsSync(finalCoverPath)) {
+        fs.copyFileSync(defaultCoverSource, finalCoverPath);
+      }
+    } // End of cover file processing
+
+    console.log(`Final cover file path: ${finalCoverPath}`);
 
     const stmt = db.prepare(`
       INSERT INTO books (title, author, file_path, cover_path, description)
@@ -104,12 +140,10 @@ ipcMain.handle('add-book', (event, bookData) => {
     const result = stmt.run(
       bookData.title,
       bookData.author,
-      bookData.filePath,
-      bookData.coverPath || null,
+      destPath,
+      finalCoverPath || null,
       bookData.description || null
     );
-
-    
     
     return result.lastInsertRowid;
   } catch (err) {
@@ -175,6 +209,46 @@ ipcMain.handle('extract-metadata', async (event, filePath) => {
 
 });
 
+ipcMain.handle('get-book-cover', async (event, bookId) => {
+  try {
+    // Query the database for the cover_path of the book
+    const stmt = db.prepare('SELECT cover_path FROM books WHERE id = ?');
+    const row = stmt.get(bookId);
+
+    if (!row || !row.cover_path) {
+      // No cover image exists for this book
+      return null;
+    }
+
+    const coverPath = row.cover_path;
+    // Check if the cover file actually exists
+    if (!fs.existsSync(coverPath)) {
+      return null;
+    }
+
+    // Read the cover file as a Buffer
+    const coverBuffer = fs.readFileSync(coverPath);
+
+    // Determine the MIME type from the file extension
+    const ext = path.extname(coverPath).toLowerCase();
+    let mimeType = 'image/png'; // default MIME type
+    if (ext === '.jpg' || ext === '.jpeg') {
+      mimeType = 'image/jpeg';
+    } else if (ext === '.gif') {
+      mimeType = 'image/gif';
+    }
+
+    // Convert the Buffer to a Base64 string and construct the data URL
+    const base64Data = coverBuffer.toString('base64');
+    const dataUrl = `data:${mimeType};base64,${base64Data}`;
+    return dataUrl;
+  } catch (err) {
+    console.error('Error in get-book-cover:', err);
+    throw err;
+  }
+});
+
+
 ipcMain.handle('get-book-by-id', (event, id) => {
   try {
     const stmt = db.prepare('SELECT * FROM books WHERE id = ?');
@@ -184,6 +258,8 @@ ipcMain.handle('get-book-by-id', (event, id) => {
     throw err;
   }
 });
+
+
 
 ipcMain.handle('update-book', (event, id, bookData) => {
   try {
@@ -238,6 +314,8 @@ ipcMain.handle('add-tag', (event, name) => {
   }
 });
 
+
+
 ipcMain.handle('get-tags', () => {
   try {
     const stmt = db.prepare('SELECT * FROM tags ORDER BY name');
@@ -276,6 +354,7 @@ ipcMain.handle('get-book-tags', (event, bookId) => {
 
 // File selection operations
 ipcMain.handle('select-epub-file', async () => {
+  //return the selected epub's path
   const { canceled, filePaths } = await dialog.showOpenDialog({
     properties: ['openFile'],
     filters: [{ name: 'EPUB Files', extensions: ['epub'] }]
@@ -292,6 +371,7 @@ ipcMain.handle('select-epub-file', async () => {
 
 
 ipcMain.handle('select-cover-image', async () => {
+  //returns the selected image's path
   const { canceled, filePaths } = await dialog.showOpenDialog({
     properties: ['openFile'],
     filters: [{ name: 'Image Files', extensions: ['jpg', 'jpeg', 'png', 'gif'] }]
@@ -301,21 +381,7 @@ ipcMain.handle('select-cover-image', async () => {
     return null;
   }
   
-  // Copy the image to a covers folder
-  const coversPath = path.join(__dirname, 'covers');
-  if (!fs.existsSync(coversPath)) {
-    fs.mkdirSync(coversPath, { recursive: true });
-  }
-  
-  const fileName = path.basename(filePaths[0]);
-  const destPath = path.join(coversPath, fileName);
-  
-  // Copy file if it doesn't already exist
-  if (!fs.existsSync(destPath)) {
-    fs.copyFileSync(filePaths[0], destPath);
-  }
-  
-  return destPath;
+  return filePaths[0];
 });
 
 
