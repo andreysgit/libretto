@@ -137,12 +137,6 @@ function setupEventListeners() {
                 addBookBtnLabel.innerText = `Destination Path 
                 ${metaData.title} - ${metaData.author}.epub`;
 
-                // selectedCoverPath = await window.databaseAPI.selectCoverImage();
-
-                // if (selectedCoverPath) {
-                //     selectedCoverFile.textContent = selectedCoverPath.split('/').pop();
-                // }
-
             } catch (err) {
                 console.error('Failed to extract metadata:', err);
               }
@@ -272,13 +266,22 @@ async function openBookDetails(bookId) {
         modalBookTitle.textContent = book.title;
         modalBookAuthor.textContent = book.author;
         modalBookDescription.textContent = book.description || 'No description available.';
-        
+
         if (book.cover_path) {
-            modalBookCover.style.backgroundImage = `url("file://${book.cover_path}")`;
-        } else {
-            modalBookCover.style.backgroundImage = '';
-            modalBookCover.style.backgroundColor = '#4a6da7';
-        }
+            try {
+              // Get the cover image as a data URL via IPC
+              const coverDataUrl = await window.databaseAPI.getBookCover(book.id);
+              if (coverDataUrl) {
+                modalBookCover.style.backgroundImage = `url('${coverDataUrl}')`;
+              }
+              else{
+                modalBookCover.style.backgroundImage = '';
+                modalBookCover.style.backgroundColor = '#4a6da7';
+              }
+            } catch (error) {
+              console.error('Error fetching cover for book', book.id, error);
+            }
+          }
         
         // Render tags
         modalBookTags.innerHTML = '';
