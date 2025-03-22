@@ -169,3 +169,16 @@ label {
 .tab-content.active {
     display: block;
 }
+
+.cover-frame {
+    width: 200px;       
+    height: 300px;      
+    overflow: hidden; 
+  }
+  
+.cover-frame img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+}

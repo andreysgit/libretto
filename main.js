@@ -7,6 +7,9 @@ const db = require('./my_sqlite3.js');  // Initialize database
 const { EPub } = require('epub2'); // Epub metadata extraction library
 const coverPath = path.join(__dirname, 'images', 'cover_placeholder.png');
 const coverURL = `file://${coverPath}`;
+const libraryPath = path.join(__dirname, 'library');
+
+console.log(libraryPath)
 
 
 //Creates the main window of the application
@@ -64,6 +67,35 @@ ipcMain.handle('get-users', () => {
 // Book-related operations
 ipcMain.handle('add-book', (event, bookData) => {
   try {
+
+    //book data
+    /*title,
+    author,
+    description,
+    filePath
+    coverPath
+    */
+
+    console.log(bookData.filePath)
+    const libraryBase = path.join(__dirname, 'library');
+
+    // Construct the directory path: library/author/title
+    const targetDir = path.join(libraryBase, bookData.author, bookData.title);
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+    
+    // Create the file name: title - author.epub
+    const fileName = `${bookData.title} - ${bookData.author}.epub`;
+    const destPath = path.join(targetDir, fileName);
+    console.log(`Dest path: ${destPath}`)
+
+    // Copy the file if it doesn't already exist in the library
+    if (!fs.existsSync(destPath)) {
+      fs.copyFileSync(bookData.filePath, destPath);
+    }
+
+
     const stmt = db.prepare(`
       INSERT INTO books (title, author, file_path, cover_path, description)
       VALUES (?, ?, ?, ?, ?)
@@ -76,6 +108,8 @@ ipcMain.handle('add-book', (event, bookData) => {
       bookData.coverPath || null,
       bookData.description || null
     );
+
+    
     
     return result.lastInsertRowid;
   } catch (err) {
@@ -131,7 +165,7 @@ ipcMain.handle('extract-metadata', async (event, filePath) => {
       metadata.cover = null;
     }
     
-    console.log("Extracted metadata (new API):", metadata);
+    console.log("Extracted metadata");
     return metadata;
 
   } catch (err) {
@@ -253,23 +287,9 @@ ipcMain.handle('select-epub-file', async () => {
 
   const sourcePath = filePaths[0];
   
-
-  // Copy the file to a library folder
-  const libraryPath = path.join(__dirname, 'library');
-  if (!fs.existsSync(libraryPath)) {
-    fs.mkdirSync(libraryPath, { recursive: true });
-  }
-  
-  const fileName = path.basename(sourcePath);
-  const destPath = path.join(libraryPath, fileName);
-  
-  // Copy file if it doesn't already exist in the library
-  if (!fs.existsSync(destPath)) {
-    fs.copyFileSync(sourcePath, destPath);
-  }
-  
-  return {sourcePath, destPath};
+  return {sourcePath};
 });
+
 
 ipcMain.handle('select-cover-image', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog({

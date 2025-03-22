@@ -85,9 +85,9 @@ function renderBooks() {
 }
 
 async function extractMetaData(epubPath) {
-    console.log("🔵 Calling extractMetaData with path:", epubPath);
+    console.log("Calling extractMetaData with path:", epubPath);
     if (!epubPath) {
-        console.error("❌ extractMetaData received undefined path!");
+        console.error("ExtractMetaData received undefined path!");
         return;
     }
 
@@ -102,14 +102,11 @@ function setupEventListeners() {
     // Select EPUB file
     selectEpubBtn.addEventListener('click', async () => {
         const fileInfo = await window.databaseAPI.selectEpubFile();
-        const { sourcePath, destPath } = fileInfo;
-        console.log("📂 Source:", sourcePath);
-        console.log("📥 Dest:", destPath);
-      
+        const { sourcePath } = fileInfo;
 
         console.log('Selected EPUB Path:', sourcePath); 
-        // Selected EPUB Path: /Users/andrey/Code/libretto/library/pg345-images-3.epub
-        if (sourcePath && destPath) {
+
+        if (sourcePath) {
             selectedEpubFile.textContent = sourcePath.split('/').pop();
             try {
                 const metaData = await extractMetaData(sourcePath);
@@ -117,6 +114,7 @@ function setupEventListeners() {
                 bookAuthorInput.value = metaData['author'];
                 bookDateInput.value = metaData['date'];
                 coverImage.src = `data:${metaData.cover.mimeType};base64,${metaData.cover.data}`;
+                selectedEpubPath = sourcePath;
 
             } catch (err) {
                 console.error('Failed to extract metadata:', err);
@@ -137,6 +135,7 @@ function setupEventListeners() {
     
     // Add book
     addBookBtn.addEventListener('click', async () => {
+        console.log("Add book button clicked")
         const title = bookTitleInput.value.trim();
         const author = bookAuthorInput.value.trim();
         const description = bookDescriptionInput.value.trim();
@@ -292,6 +291,7 @@ function resetForm() {
 
 // Update the state of the add button
 function updateAddButtonState() {
+    console.log("updateAddButtonState")
     const title = bookTitleInput.value.trim();
     const author = bookAuthorInput.value.trim();
     addBookBtn.disabled = !title || !author || !selectedEpubPath;
