@@ -8,6 +8,8 @@ const { EPub } = require('epub2'); // Epub metadata extraction library
 const coverPath = path.join(__dirname, 'images', 'cover_placeholder.png');
 const coverURL = `file://${coverPath}`;
 const libraryPath = path.join(__dirname, 'library');
+const os = require('os');
+
 
 console.log(libraryPath)
 
@@ -64,13 +66,13 @@ ipcMain.handle('get-users', () => {
   }
 });
 
-// Book-related operations
-ipcMain.handle('add-book', (event, bookData) => {
+async function addBook(bookData){
   try {
     // bookData should include:
     // title, author, description, filePath, coverPath, coverImage
 
-    console.log(bookData.filePath);
+    console.log(`Adding book: ${bookData.title} by ${bookData.author}`)
+
     const libraryBase = path.join(__dirname, 'library');
 
     // Construct the directory path: library/author/title
@@ -92,13 +94,24 @@ ipcMain.handle('add-book', (event, bookData) => {
     // Process cover file if provided; otherwise, use a default cover image from assets
     let finalCoverPath = null;
 
-    if (bookData.coverImage) {
-      // Manual cover was provided, copy it to the same folder
-      // Expecting coverImage to be a data URL like "data:image/png;base64,..."
-      const dataUrl = bookData.coverImage;
-      // Use a regex to extract mime type and base64 data
-      const matches = dataUrl.match(/^data:(.+);base64,(.+)$/);
+    let dataUrl;
 
+    if (bookData.cover) {
+      let matches = null;
+      // Expecting coverImage to be a data URL like "data:image/png;base64,..."
+      // If coverImage is an object, convert it to a data URL string.
+        if (typeof bookData.cover === 'object' && bookData.cover.data && bookData.cover.mimeType) {
+          dataUrl = `data:${bookData.cover.mimeType};base64,${bookData.cover.data}`;
+        } else if (typeof bookData.cover === 'string') {
+          dataUrl = bookData.cover;
+        }
+
+        if(dataUrl){
+          matches = dataUrl.match(/^data:(.+);base64,(.+)$/);
+
+        }
+
+        
       if (matches) {
         const mimeType = matches[1]; // e.g., image/png
         const base64Data = matches[2];
@@ -113,15 +126,16 @@ ipcMain.handle('add-book', (event, bookData) => {
         console.error('Invalid cover image data URL');
       }
     } else if (bookData.coverPath) {
-      // Fallback to a manual cover file if available
+      // User provided a cover path - saves that file to the library
       const coverFileExt = path.extname(bookData.coverPath);
       const coverFileName = `${bookData.title} - ${bookData.author}${coverFileExt}`;
       finalCoverPath = path.join(targetDir, coverFileName);
       if (!fs.existsSync(finalCoverPath)) {
         fs.copyFileSync(bookData.coverPath, finalCoverPath);
       }
+
     } else {
-      // Use a default cover if no cover provided (optional)
+      // Use a default cover if no cover provided
       const defaultCoverSource = path.join(__dirname, 'assets', 'default_cover.png');
       const coverFileName = `${bookData.title} - ${bookData.author}.png`;
       finalCoverPath = path.join(targetDir, coverFileName);
@@ -150,6 +164,13 @@ ipcMain.handle('add-book', (event, bookData) => {
     console.error('Error adding book:', err);
     throw err;
   }
+}
+
+// Book-related operations
+ipcMain.handle('add-book', (event, bookData) => {
+  result = addBook(bookData);
+  return result;
+
 });
 
 ipcMain.handle('get-books', () => {
@@ -163,7 +184,7 @@ ipcMain.handle('get-books', () => {
 });
 
 
-ipcMain.handle('extract-metadata', async (event, filePath) => {
+async function extractMetaData(filePath){
 
   try {
     console.log("Creating EPUB instance for:", filePath);
@@ -180,7 +201,7 @@ ipcMain.handle('extract-metadata', async (event, filePath) => {
       raw: epub.metadata[EPub.SYMBOL_RAW_DATA] || null,
     };
 
-        // Extract cover image if available
+    // Extract cover image if available
     if (epub.metadata.cover) {
       metadata.cover = await new Promise((resolve, reject) => {
         epub.getImage(epub.metadata.cover, (err, data, mimeType) => {
@@ -199,13 +220,19 @@ ipcMain.handle('extract-metadata', async (event, filePath) => {
       metadata.cover = null;
     }
     
-    console.log("Extracted metadata");
     return metadata;
-
   } catch (err) {
     console.error("Failed to extract metadata", err);
     throw err;
   }
+
+}
+
+ipcMain.handle('extract-metadata', async (event, filePath) => {
+
+    const metaData = extractMetaData(filePath);
+    console.log("Extracted metadata");
+    return metaData;
 
 });
 
@@ -283,6 +310,53 @@ ipcMain.handle('update-book', (event, id, bookData) => {
     throw err;
   }
 });
+
+
+ipcMain.handle('handle-epub-drag', async (event, fileData) => {
+  if (fileData.path) {
+    result = extractMetaData(fileData.path)
+    return { status: 'success', type: 'path' };
+    //Epub extractor library requires a filepath
+    //If we have data instead, we should save that data as a temporary file and use it to extract metadata before saving the file to the library
+
+  } else if (fileData.data) {
+    const arrayBuffer = fileData.data;
+    console.log("EPUB loaded in browser. Length:", arrayBuffer.byteLength);
+    
+    // Generate a temporary file path.
+    const tempDir = os.tmpdir();
+    const tempFilePath = path.join(tempDir, `temp-${Date.now()}.epub`);
+    
+    // Write the ArrayBuffer to the temporary file.
+    fs.writeFileSync(tempFilePath, Buffer.from(arrayBuffer));
+    
+    // Now extract the metadata using the temporary file path.
+
+
+    let bookData;
+    try {
+      bookData = await extractMetaData(tempFilePath);
+      if (!bookData) {
+        throw new Error("Metadata extraction returned undefined");
+      }
+    } catch (error) {
+      console.error("Error extracting metadata:", error);
+      return { status: 'error', message: 'Metadata extraction failed' };
+    }
+    
+    bookData.filePath = tempFilePath;
+    // console.log("bookdata = " + JSON.stringify(bookData, null, 2));
+    const bookId = await addBook(bookData);
+    
+    // Optionally, delete the temporary file if it's no longer needed:
+    fs.unlinkSync(tempFilePath);
+    
+    return { status: 'success', type: 'data', metadata: bookData, bookId };
+  } else {
+    return { status: 'error', message: 'Invalid file data' };
+  }
+});
+
 
 ipcMain.handle('delete-book', (event, id) => {
   try {

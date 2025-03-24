@@ -30,6 +30,9 @@ const openExternalBtn = document.getElementById('openExternalBtn');
 const coverImage = document.getElementById('selectedCoverImage')
 const addBookBtnLabel = document.getElementById('addBookBtnLabel')
 const resetBtn = document.getElementById('resetBtn');
+const dropZone = document.getElementById('drop-zone');
+
+
 
 
 
@@ -38,17 +41,22 @@ async function init() {
     await loadBooks();
     setupEventListeners();
     setupTabs();
-    
+    placeHolderCover();
+
+}
+
+async function placeHolderCover(){
     const coverPlaceHolder = await window.databaseAPI.getCoverPlaceholder();
-    const coverImage = document.getElementById('selectedCoverImage');
     coverImage.src = coverPlaceHolder;
 
 }
+
 
 // Load books from the database
 async function loadBooks() {
     try {
         books = await window.databaseAPI.getBooks();
+        console.log("Loaded books from DB:", books.length);
         renderBooks();
     } catch (err) {
         console.error('Error loading books:', err);
@@ -98,6 +106,8 @@ async function renderBooks() {
       bookCard.addEventListener('click', () => openBookDetails(book.id));
       bookGrid.appendChild(bookCard);
     }
+    console.log("Rendered books count:", bookGrid.childNodes.length);
+
   }
 
 // Helper function
@@ -114,9 +124,130 @@ async function extractMetaData(epubPath) {
     return metaData; // metaData is a plain JS object
 }
 
+
+async function renderBook(book) {
+    // Create a new card for the book.
+    const bookCard = document.createElement('div');
+    bookCard.className = 'book-card';
+    bookCard.dataset.id = book.id;
+    
+    // Start with a fallback style.
+    let coverStyle = 'background-color: #4a6da7';
+    
+    // If the book has a cover, fetch its data URL.
+    if (book.cover_path) {
+      try {
+        const coverDataUrl = await window.databaseAPI.getBookCover(book.id);
+        if (coverDataUrl) {
+          coverStyle = `background-image: url('${coverDataUrl}')`;
+        }
+      } catch (error) {
+        console.error('Error fetching cover for book', book.id, error);
+      }
+    }
+    
+    bookCard.innerHTML = `
+      <div class="book-cover" style="${coverStyle}"></div>
+      <div class="book-info">
+        <h3 class="book-title">${book.title}</h3>
+        <p class="book-author">${book.author}</p>
+      </div>
+    `;
+    
+    // Open book details when clicked.
+    bookCard.addEventListener('click', () => openBookDetails(book.id));
+    
+    // Append the new card to the book grid.
+    bookGrid.appendChild(bookCard);
+  }
+
+
+async function handleEpubDrag(file) {
+    if (file.path) {
+      const result = await window.databaseAPI.handleEpubDrag({ path: file.path });
+      await renderBook({
+        id: result.bookId,
+        ...result.metadata
+      });
+      console.log(result);
+    } else {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+              try {
+                const arrayBuffer = e.target.result;
+                const result = await window.databaseAPI.handleEpubDrag({ data: arrayBuffer });
+                console.log(result);
+                // Immediately render the new book.
+                await renderBook({
+                  id: result.bookId,
+                  ...result.metadata
+                });
+                resolve(result);
+              } catch (err) {
+                reject(err);
+              }
+            };
+            reader.onerror = reject;
+            reader.readAsArrayBuffer(file);
+          });
+    
+  }}
+
+
 // Set up event listeners
 function setupEventListeners() {
     console.log("setting up event listeners")
+
+    dropZone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropZone.classList.add("hover");
+        e.dataTransfer.dropEffect = "copy";
+    });
+
+    dropZone.addEventListener("dragleave", () => {
+        dropZone.classList.remove("hover");
+    });
+
+    dropZone.addEventListener("drop", async(e) => {
+        console.log("Drop event triggered");
+
+        e.preventDefault();
+        dropZone.classList.remove("hover");
+    
+        const files = e.dataTransfer.files;
+    
+        // for (let i = 0; i < files.length; i++) {
+        //     const file = files[i];
+        //     if (file.name.endsWith(".epub")) {
+        //     console.log("EPUB file dropped:", file.name);
+        //     handleEpubDrag(file);
+        //     } else {
+        //     console.warn("Not an EPUB:", file.name);
+        //     }
+        // }
+
+          // Process all EPUB files concurrently
+        const promises = [];
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            if (file.name.endsWith(".epub")) {
+            console.log("EPUB file dropped:", file.name);
+            promises.push(handleEpubDrag(file));
+            } else {
+            console.warn("Not an EPUB:", file.name);
+            }
+        }
+        
+        // Wait until all files are processed
+        await Promise.all(promises);
+        
+        // Then re-render the library once
+        await loadBooks();
+
+    });
+    
+
     // Select EPUB file
     selectEpubBtn.addEventListener('click', async () => {
         const fileInfo = await window.databaseAPI.selectEpubFile();
@@ -312,7 +443,7 @@ function resetForm() {
     coverImage.innerHTML = window.databaseAPI.getCoverPlaceholder();
     updateAddButtonState();
     addBookBtnLabel.value = "Destination Path"
-
+    placeHolderCover();
 
 }
 
@@ -322,8 +453,8 @@ function updateAddButtonState() {
     const title = bookTitleInput.value.trim();
     const author = bookAuthorInput.value.trim();
     addBookBtn.disabled = !title || !author || !selectedEpubPath;
-    addBookBtnLabel.innerText = `Destination Path 
-    ${title} - ${author}.epub`;
+    addBookBtnLabel.innerText = `Destination Path
+    ${title} - ${author}`;
 
 }
 

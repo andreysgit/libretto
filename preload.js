@@ -33,8 +33,11 @@ contextBridge.exposeInMainWorld('databaseAPI', {
   extractMetaData: (filePath) => ipcRenderer.invoke('extract-metadata', filePath),
 
   // Get book cover image object
-  getBookCover: (id) => ipcRenderer.invoke('get-book-cover', id)
-  
+  getBookCover: (id) => ipcRenderer.invoke('get-book-cover', id),
+
+  // Copy a file in to the library by drag n drop
+  handleEpubDrag: (fileData) => ipcRenderer.invoke('handle-epub-drag', fileData)
+
   
 });
 
