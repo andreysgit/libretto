@@ -113,6 +113,7 @@
             <div class="tab-content" id="readTab">
                 <div style="text-align: center; padding: 40px 0;">
                     <p>This feature would integrate with an EPUB reader.</p>
+                    <div id="reader" style="width: 100%; height: 600px;"></div>
                     <button id="openExternalBtn">Open in External Reader</button>
                 </div>
             </div>
@@ -120,7 +121,10 @@
         </div>
     </div>
 
-    <script src="render.js"></script>
+    <script src="./node_modules/jszip/dist/jszip.min.js"></script>
+    <script src="./node_modules/epubjs/dist/epub.min.js"></script>
+    <script type="module" src="render.js"></script>
+
 
 </body>
 </html>

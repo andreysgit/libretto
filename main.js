@@ -10,8 +10,46 @@ const coverURL = `file://${coverPath}`;
 const libraryPath = path.join(__dirname, 'library');
 const os = require('os');
 
-
 console.log(libraryPath)
+
+
+ipcMain.handle('get-epub-buffer', async (event, filePath) => {
+  const buffer = fs.readFileSync(filePath);
+  return buffer.buffer; // Return ArrayBuffer
+});
+
+
+function openReaderWindow(bookPath) {
+  const win = new BrowserWindow({
+    width: 1000,
+    height: 800,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      
+    },
+
+  });
+
+  win.webContents.openDevTools();
+
+  // Load reader.html and pass the book path via query param
+  win.loadFile('reader.html', {
+    query: { path: bookPath },
+  });
+}
+
+// IPC handler to open reader
+ipcMain.handle('open-reader-window', (event, filePath) => {
+  openReaderWindow(filePath);
+});
+
+
+ipcMain.handle('handle-read-epub', async (event, filePath) => {
+  const buffer = fs.readFileSync(filePath);
+  return buffer.buffer; // Return ArrayBuffer to renderer
+});
+
 
 
 //Creates the main window of the application

@@ -1,9 +1,13 @@
+
+
 // Global variables
 let selectedEpubPath = null;
 let selectedCoverPath = null;
 let currentBookId = null;
 let books = [];
 let metaData = null;
+let modalSelectedBook = null;
+
 
 // DOM Elements
 const bookDateInput = document.getElementById('bookDate');
@@ -31,6 +35,10 @@ const coverImage = document.getElementById('selectedCoverImage')
 const addBookBtnLabel = document.getElementById('addBookBtnLabel')
 const resetBtn = document.getElementById('resetBtn');
 const dropZone = document.getElementById('drop-zone');
+const reader = document.getElementById('reader');
+
+
+
 
 
 
@@ -217,17 +225,6 @@ function setupEventListeners() {
     
         const files = e.dataTransfer.files;
     
-        // for (let i = 0; i < files.length; i++) {
-        //     const file = files[i];
-        //     if (file.name.endsWith(".epub")) {
-        //     console.log("EPUB file dropped:", file.name);
-        //     handleEpubDrag(file);
-        //     } else {
-        //     console.warn("Not an EPUB:", file.name);
-        //     }
-        // }
-
-          // Process all EPUB files concurrently
         const promises = [];
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
@@ -353,9 +350,19 @@ function setupEventListeners() {
         }
     });
     
+    async function loadBook() {
+      const bookPath = modalSelectedBook.file_path;
+      console.log("Loaded book from modal:", modalSelectedBook.file_path);
+      await window.readerAPI.openReaderWindow(bookPath);
+
+    }
+    
+    
     // Open in external reader
     openExternalBtn.addEventListener('click', () => {
-        alert('This would open the book in an external reader.');
+        
+      loadBook();
+
     });
     
     // Close modal when clicking outside
@@ -391,17 +398,17 @@ function setupTabs() {
 async function openBookDetails(bookId) {
     try {
         currentBookId = bookId;
-        const book = await window.databaseAPI.getBookById(bookId);
+        modalSelectedBook = await window.databaseAPI.getBookById(bookId);
         const tags = await window.databaseAPI.getBookTags(bookId);
         
-        modalBookTitle.textContent = book.title;
-        modalBookAuthor.textContent = book.author;
-        modalBookDescription.textContent = book.description || 'No description available.';
+        modalBookTitle.textContent = modalSelectedBook.title;
+        modalBookAuthor.textContent = modalSelectedBook.author;
+        modalBookDescription.textContent = modalSelectedBook.description || 'No description available.';
 
-        if (book.cover_path) {
+        if (modalSelectedBook.cover_path) {
             try {
               // Get the cover image as a data URL via IPC
-              const coverDataUrl = await window.databaseAPI.getBookCover(book.id);
+              const coverDataUrl = await window.databaseAPI.getBookCover(modalSelectedBook.id);
               if (coverDataUrl) {
                 modalBookCover.style.backgroundImage = `url('${coverDataUrl}')`;
               }
@@ -410,7 +417,7 @@ async function openBookDetails(bookId) {
                 modalBookCover.style.backgroundColor = '#4a6da7';
               }
             } catch (error) {
-              console.error('Error fetching cover for book', book.id, error);
+              console.error('Error fetching cover for book', modalSelectedBook.id, error);
             }
           }
         

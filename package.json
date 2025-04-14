@@ -20,7 +20,9 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "electron": "^35.0.3",
-    "express": "^4.21.2"
+    "epubjs": "^0.3.93",
+    "express": "^4.21.2",
+    "jszip": "^3.10.1"
   },
   "devDependencies": {
     "electron-builder": "^24.13.3",
@@ -30,7 +32,9 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "better-sqlite3",
-      "electron"
+      "core-js",
+      "electron",
+      "es5-ext"
     ]
   }
 }

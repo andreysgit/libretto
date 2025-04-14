@@ -25,10 +25,6 @@ contextBridge.exposeInMainWorld('databaseAPI', {
   selectEpubFile: () => ipcRenderer.invoke('select-epub-file'),
   selectCoverImage: () => ipcRenderer.invoke('select-cover-image'),
 
-  // // Web server operations
-  // startWebServer: () => ipcRenderer.invoke('start-web-server'),
-  // stopWebServer: () => ipcRenderer.invoke('stop-web-server'),
-
   // Epub metadata extraction
   extractMetaData: (filePath) => ipcRenderer.invoke('extract-metadata', filePath),
 
@@ -36,9 +32,24 @@ contextBridge.exposeInMainWorld('databaseAPI', {
   getBookCover: (id) => ipcRenderer.invoke('get-book-cover', id),
 
   // Copy a file in to the library by drag n drop
-  handleEpubDrag: (fileData) => ipcRenderer.invoke('handle-epub-drag', fileData)
+  handleEpubDrag: (fileData) => ipcRenderer.invoke('handle-epub-drag', fileData),
 
-  
+  readEpub: (filePath) => ipcRenderer.invoke('handle-read-epub', filePath),
+
+
+
 });
+
+contextBridge.exposeInMainWorld('readerAPI', {
+  getBookPath: () => {
+    const urlParams = new URLSearchParams(location.search);
+    return urlParams.get('path');
+  },
+  getBookBuffer: (filePath) => ipcRenderer.invoke('get-epub-buffer', filePath),
+
+  openReaderWindow: (filePath) => ipcRenderer.invoke('open-reader-window', filePath),
+});
+
+
 
 console.log('databaseAPI has been exposed.');
